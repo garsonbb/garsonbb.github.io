@@ -1,0 +1,311 @@
+<!doctype html><html lang=zh-hans>
+<head>
+<meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no">
+<meta name=HandheldFriendly content="True">
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<meta http-equiv=cache-control content="no-transform">
+<meta http-equiv=cache-control content="no-siteapp">
+<meta name=generator content="Hugo 0.86.0">
+<link rel="shortcut icon" href=https://pic.garnote.top/2021/08/11/eeb6915d14722.ico>
+<title>pid控制的倒立摆 - 梦渡</title>
+<meta name=author content="Garson">
+<meta name=description content="A minimal Hugo theme with nice theme color.">
+<meta name=keywords content="杂">
+<meta property="og:title" content="pid控制的倒立摆">
+<meta name=twitter:title content="pid控制的倒立摆">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://garnote.top/post/pid_pendulum/"><meta property="og:description" content>
+<meta name=twitter:description content><meta property="og:image" content="https://garnote.top/img/og.png">
+<meta name=twitter:card content="summary_large_image">
+<meta name=twitter:image content="https://garnote.top/img/og.png"><meta property="article:published_time" content="2020-02-05T16:25:00+00:00"><meta property="article:modified_time" content="2020-02-05T16:25:00+00:00">
+<style>@media(prefers-color-scheme:dark){body[data-theme=auto] img{filter:brightness(60%)}}body[data-theme=dark] img{filter:brightness(60%)}</style>
+<link rel=stylesheet href=https://garnote.top/assets/css/fuji.min.css>
+</head>
+<body data-theme=auto data-theme-auto=true>
+<script data-cfasync=false>var fujiThemeData=localStorage.getItem('fuji_data-theme');fujiThemeData?fujiThemeData!=='auto'&&document.body.setAttribute('data-theme',fujiThemeData==='dark'?'dark':'light'):localStorage.setItem('fuji_data-theme','auto')</script>
+<header>
+<div class="container-lg clearfix">
+<div class="col-12 header">
+<a class=title-main href=https://garnote.top>梦渡</a>
+<span class=title-sub>Garson's Note</span>
+</div>
+</div>
+</header>
+<main>
+<div class="container-lg clearfix">
+<div class="col-12 col-md-9 float-left content">
+<article>
+<h2 class="post-item post-title">
+<a href=https://garnote.top/post/pid_pendulum/>pid控制的倒立摆</a>
+</h2>
+<div class="post-item post-meta">
+<span><i class="iconfont icon-today-sharp"></i>&nbsp;2020-02-05</span>
+<span><i class="iconfont icon-file-tray-sharp"></i>&nbsp;910 字</span>
+<span><i class="iconfont icon-pricetags-sharp"></i>&nbsp;<a href=/tags/%E6%9D%82>杂</a>&nbsp;</span>
+</div>
+<div class="post-content markdown-body">
+<h2 id=做一个倒立摆>做一个倒立摆</h2>
+<p>这个倒立摆，一开始是打算用自己做的结构，用木板和铝型材搭，用57步进电机驱动。这个结构有很大的问题，步进电机悬空，下盘不稳，很容易就整个结构一起震动，难以平衡。没上导线环，会绕线。只剩一张他的遗照了。</p>
+<p><img class=img-zoomable src=https://pic.garnote.top/2020/02/05/4d883af14349c.png alt=IMG_20190713_202732.png>
+</p>
+<p>图里还用了一个木制法兰盘23333用502做的（简直是魔鬼），连接到转轴上也是用502.
+接下来直接去淘宝买了一套结构.</p>
+<p>关键的代码也就是下面两个pid环。</p>
+<h2 id=两个pid环的代码>两个pid环的代码</h2>
+<pre><code>int PID_Angle_Cal(int ang_Now, int ang_Target)
+{
+    float dError,Bias=0;
+    static float iError;
+    Bias = ang_Now - ang_Target;
+    iError += Bias;
+    if (iError&gt; 2200)	iError=2200;
+    if (iError&lt;-2200)	iError=-2200;//iError上下限
+    dError = Bias - last_Bias;
+    last_Bias = Bias;
+
+    return ang_p * Bias + ang_i * iError + ang_d * dError;
+}
+</code></pre>
+<pre><code>int PID_Pos_Cal(int pos_Now, int pos_Target)
+{
+    float dError;
+    static float Bias,last_Bias,iError;
+  	Least = pos_Now - pos_Target;
+    Bias *=0.8;
+    Bias += Least * 0.2;//一阶低通滤波
+	dError = Bias - last_Bias;
+	last_Bias = Bias;
+    iError += Bias;
+    if (iError&gt; 1900)	iError=1900;
+    if (iError&lt;-1900)	iError=-1900;
+	return Bias * pos_p + iError * pos_i + dError * pos_d; 
+} 
+</code></pre>
+<h2 id=调试>调试</h2>
+<p>一开始按网上的经验，只用pd控制，调了好久，一直效果不好，小幅抖动到大幅抖动，然后掉了。然后，突然意识到，会不会是Bias较小是时候，电机的扭力和控制量的关系与Bias较大时的关系相差较大。就想到，加上i的消除静差的作用应该就可以了。加上i之后，再调了一下就有下面的效果了。</p>
+<p>补充一下调试过程</p>
+<ol>
+<li>12位adc，读取电位器的值是0-4095，距离竖立位置的10%差值(左右5%)大概是400。我的电机控制量满速是16800。
+我就大概取P位16800/(400/2)=84,可以看到倒立摆可以左右摇晃不倒1-2秒。</li>
+<li>然后随缘调d，调到倒立摆比较快左右摇晃不倒更久一点时间，然后慢慢调小d，直到出现这个现象，在倒下前只往一个方向倾倒。</li>
+<li>调i，i调起来比较麻烦，i的大小和控制频率有关。先说i的积分上限，我先把pid控制关闭，直接调电机速度控制量，找到电机将动未动的临界点(我大概是2200)，把这时的控制量作为i的积分上限。观察发现仅在pd控制时(点2中说的现象)，距离竖立位置的误差量大概是50-200，然后我取100来计算，用2200/100 = 22，我希望在10次计算(位置误差一直没有减小时)后达到积分上限，22/2=2.2。
+在控制频率一定时(我的PID的控制频率是100Hz)，i越大，系统的抖动越大，i越小，i的控制作用越不明显。</li>
+<li>最后慢慢微调pid三个量得到更好的效果。</li>
+</ol>
+<iframe src="//player.bilibili.com/player.html?aid=86883167&cid=148473785&page=1" scrolling=no border=0 frameborder=no framespacing=0 allowfullscreen></iframe>
+</div>
+</article>
+<div class="license markdown-body">
+<blockquote>
+<p>除特殊注明部分，本站内容采用 <a rel=license href=http://creativecommons.org/licenses/by-nc-sa/4.0/ target=_blank>CC BY-NC-SA 4.0</a> 进行许可。</p>
+</blockquote>
+</div>
+<div id=tcomment></div>
+<script src=https://cdn.jsdelivr.net/npm/twikoo@1.4.3/dist/twikoo.all.min.js></script>
+<script>twikoo.init({envId:'https://my-twikoo-8ibqhllap-z1195224900-gmailcom.vercel.app/',el:'#tcomment'})</script>
+</div>
+<aside class="col-12 col-md-3 float-left sidebar">
+<div class="sidebar-item sidebar-pages">
+<h3>页面</h3>
+<ul>
+<li>
+<a href=/>Home</a>
+</li>
+<li>
+<a href=/archives/>Archives</a>
+</li>
+<li>
+<a href=/board/>Board</a>
+</li>
+<li>
+<a href=/about/>About</a>
+</li>
+<li>
+<a href=/search/>Search</a>
+</li>
+<li>
+<a href=/index.xml>RSS</a>
+</li>
+</ul>
+</div>
+<div class="sidebar-item sidebar-links">
+<h3>链接</h3>
+<ul>
+<li>
+<a href=https://github.com/garsonbb target=_blank><span>GitHub</span></a>
+</li>
+<li>
+<a href=https://space.bilibili.com/12225878 target=_blank><span>Bilibili</span></a>
+</li>
+<li>
+<a href=mailto:z1195224900@gmail.com target=_blank><span>Email</span></a>
+</li>
+</ul>
+</div>
+<div class="sidebar-item sidebar-tags">
+<h3>标签</h3>
+<div>
+<span>
+<a href=/tags/clion/>Clion</a>
+</span>
+<span>
+<a href=/tags/diy/>DIY</a>
+</span>
+<span>
+<a href=/tags/nas/>Nas</a>
+</span>
+<span>
+<a href=/tags/stm32/>STM32</a>
+</span>
+<span>
+<a href=/tags/unraid/>Unraid</a>
+</span>
+<span>
+<a href=/tags/%E6%8E%A7%E5%88%B6/>控制</a>
+</span>
+<span>
+<a href=/tags/%E6%91%84/>摄</a>
+</span>
+<span>
+<a href=/tags/%E6%97%A5%E5%B8%B8/>日常</a>
+</span>
+<span>
+<a href=/tags/%E6%9D%82/>杂</a>
+</span>
+</div>
+</div>
+<div class="sidebar-item sidebar-toc">
+<h3>目录</h3><nav id=TableOfContents>
+<ul>
+<li>
+<ul>
+<li><a href=#做一个倒立摆>做一个倒立摆</a></li>
+<li><a href=#两个pid环的代码>两个pid环的代码</a></li>
+<li><a href=#调试>调试</a></li>
+</ul>
+</li>
+</ul>
+</nav></div>
+</aside>
+</div>
+<div class=btn>
+<div class=btn-menu id=btn-menu>
+<i class="iconfont icon-grid-sharp"></i>
+</div>
+<div class=btn-toggle-mode>
+<i class="iconfont icon-contrast-sharp"></i>
+</div>
+<div class=btn-scroll-top>
+<i class="iconfont icon-chevron-up-circle-sharp"></i>
+</div>
+</div>
+<aside class=sidebar-mobile style=display:none>
+<div class=sidebar-wrapper>
+<div class="sidebar-item sidebar-pages">
+<h3>页面</h3>
+<ul>
+<li>
+<a href=/>Home</a>
+</li>
+<li>
+<a href=/archives/>Archives</a>
+</li>
+<li>
+<a href=/board/>Board</a>
+</li>
+<li>
+<a href=/about/>About</a>
+</li>
+<li>
+<a href=/search/>Search</a>
+</li>
+<li>
+<a href=/index.xml>RSS</a>
+</li>
+</ul>
+</div>
+<div class="sidebar-item sidebar-links">
+<h3>链接</h3>
+<ul>
+<li>
+<a href=https://github.com/garsonbb target=_blank><span>GitHub</span></a>
+</li>
+<li>
+<a href=https://space.bilibili.com/12225878 target=_blank><span>Bilibili</span></a>
+</li>
+<li>
+<a href=mailto:z1195224900@gmail.com target=_blank><span>Email</span></a>
+</li>
+</ul>
+</div>
+<div class="sidebar-item sidebar-tags">
+<h3>标签</h3>
+<div>
+<span>
+<a href=/tags/clion/>Clion</a>
+</span>
+<span>
+<a href=/tags/diy/>DIY</a>
+</span>
+<span>
+<a href=/tags/nas/>Nas</a>
+</span>
+<span>
+<a href=/tags/stm32/>STM32</a>
+</span>
+<span>
+<a href=/tags/unraid/>Unraid</a>
+</span>
+<span>
+<a href=/tags/%E6%8E%A7%E5%88%B6/>控制</a>
+</span>
+<span>
+<a href=/tags/%E6%91%84/>摄</a>
+</span>
+<span>
+<a href=/tags/%E6%97%A5%E5%B8%B8/>日常</a>
+</span>
+<span>
+<a href=/tags/%E6%9D%82/>杂</a>
+</span>
+</div>
+</div>
+<div class="sidebar-item sidebar-toc">
+<h3>目录</h3>
+<nav id=TableOfContents>
+<ul>
+<li>
+<ul>
+<li><a href=#做一个倒立摆>做一个倒立摆</a></li>
+<li><a href=#两个pid环的代码>两个pid环的代码</a></li>
+<li><a href=#调试>调试</a></li>
+</ul>
+</li>
+</ul>
+</nav>
+</div>
+</div>
+</aside>
+</main>
+<footer>
+<div class="container-lg clearfix">
+<div class="col-12 footer">
+<span>&copy; 2019-2021
+<a href=https://garnote.top>Garson</a>
+| <a href=https://github.com/dsrkafuu/hugo-theme-fuji>Source code</a>
+| 基于 <a href=https://github.com/dsrkafuu/hugo-theme-fuji/ target=_blank>Fuji-v2</a> & <a href=https://gohugo.io/ target=_blank>Hugo</a> 构建
+</span>
+</div>
+</div>
+</footer>
+<script defer src=https://cdn.jsdelivr.net/npm/medium-zoom@1.0.6/dist/medium-zoom.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/lazysizes@5.3.2/lazysizes.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/prismjs@1.23.0/components/prism-core.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/prismjs@1.23.0/plugins/autoloader/prism-autoloader.min.js></script>
+<script defer src=/assets/js/fuji.min.js></script>
+<link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/katex.min.css>
+<script defer src=https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/katex.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/contrib/auto-render.min.js onload=renderMathInElement(document.body)></script>
+</body>
+</html>
