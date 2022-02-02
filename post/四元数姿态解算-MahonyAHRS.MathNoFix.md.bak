@@ -1,0 +1,234 @@
+---
+title: "四元数姿态解算-MahonyAHRS"
+tags: ["控制"]
+draft: false
+slug: "mahonyahrs"
+mathjax: true
+date: "2021-05-26 00:17:00"
+---
+
+## 加速度计和角速度计解算姿态
+
+在只使用加速度计和陀螺仪融合数据时，流程是这样的：
+1. 归一化传感器输入的B系加速度
+$
+{\begin{bmatrix}b\_a_x & b\_a_y & b\_a_z\end{bmatrix}}^\top
+$
+。
+2. 把N系重力加速度旋转到B系
+$
+{\begin{bmatrix}n2b\_a_x & n2b\_a_y & n2b\_a_z\end{bmatrix}}^\top
+$
+。
+N系重力加速度就是g，
+$
+{\begin{bmatrix} 0 & 0 & 1\end{bmatrix}}^\top
+$。
+3. 把上面两个同在B系的加速度进行叉积运算，得到误差
+$
+{\begin{bmatrix}e\_a_x & e\_a_y & e\_a_z\end{bmatrix}}^\top
+$
+。（得到误差反映的就是目前解算得到的姿态矩阵与真实姿态之间的误差）。
+4. 把上面获得的误差通过PI控制器补偿到传感器输入的角速度。
+$
+{\begin{bmatrix}b\_g_x & b\_g_y & b\_g_z\end{bmatrix}}^\top
+$
+。
+5. 使用上面已经补偿的角速度和一阶龙塔公式更新四元数。
+6. 归一化四元数。
+
+在这个过程中，就是利用**重力加速度恒等于1g并垂直向下**，来修正由角速度积分得到的姿态矩阵。
+
+接下来确定旋转矩阵的方向：
+
+由
+$
+q_0=\cos{\frac{\theta}{2}} \quad ,q_1= - \sin{\frac{\theta}{2}}\hat{x} \quad ,
+q_2= - \sin{\frac{\theta}{2}}\hat{y} \quad ,q_3= - \sin{\frac{\theta}{2}}\hat{z}
+$
+可算得下面的两个四元数旋转矩阵。具体计算过程可以看
+
+
+> [Krasjet对于四元数与三维旋转的简单讨论](https://krasjet.github.io/quaternion/quaternion.pdf)
+
+> [Madgwick的文章](https://www.x-io.co.uk/res/doc/madgwick_internal_report.pdf)
+
+
+
+下面的$C_n^b$和$C_b^n$是和[Madgwick的文章](https://www.x-io.co.uk/res/doc/madgwick_internal_report.pdf)
+里的一样，**右手坐标系**，由**左手定则**确定**向量**旋转**正方向**。但再实际过程中，重力加速度的指向在航向坐标系和地理坐标系的指向是一样的，旋转的是航向坐标系，所以下面的四元数旋转矩阵实际上是**右手坐标系**，由**右手定则**确定的**航向坐标系**旋转**正方向**。
+
+
+$$
+C_n^b=
+\begin{bmatrix}
+2q_0^2-1+2q_1^2 & 2q_1q_2+2q_0q_3 & 2q_1q_3-2q_0q_2 \\
+2q_1q_2-2q_0q_3 & 2q_0^2-1+2q_2^2 & 2q_2q_3+2q_0q_1 \\
+2q_1q_3+2q_0q_2 & 2q_2q_3-2q_0q_1 & 2q_0^2-1+2q_3^2
+\end{bmatrix}
+$$
+
+
+$$
+C_b^n=
+\begin{bmatrix}
+2q_0^2-1+2q_1^2 & 2q_1q_2-2q_0q_3 & 2q_1q_3+2q_0q_2 \\
+2q_1q_2+2q_0q_3 & 2q_0^2-1+2q_2^2 & 2q_2q_3-2q_0q_1 \\
+2q_1q_3-2q_0q_2 & 2q_2q_3+2q_0q_1 & 2q_0^2-1+2q_3^2
+\end{bmatrix}
+$$
+
+
+为了让欧拉角矩阵与四元数矩阵
+$
+C_n^b
+$
+的坐标系对应，下面的三个旋转矩阵都是**右手坐标系**，由**左手定则**确定**向量**旋转**正方向**的。
+$
+\begin{bmatrix}X\end{bmatrix}
+$
+指绕x轴旋转(Pitch)，
+$
+\begin{bmatrix}Y\end{bmatrix}
+$
+指绕y轴旋转(Roll)，
+$
+\begin{bmatrix}Z\end{bmatrix}
+$
+指绕z轴旋转(Yaw)。
+
+
+$$
+\begin{bmatrix}\vec{A_b}\end{bmatrix}=\begin{bmatrix}X\end{bmatrix}\begin{bmatrix}Y\end{bmatrix}\begin{bmatrix}Z\end{bmatrix}\begin{bmatrix}\vec{A_n}\end{bmatrix}
+$$
+
+
+$$
+\begin{bmatrix}X\end{bmatrix}=
+\begin{bmatrix}
+1 & 0             & 0            \\
+0 & \cos\theta_x  & \sin\theta_x \\
+0 & -\sin\theta_x & \cos\theta_x
+\end{bmatrix}\;\begin{bmatrix}Y\end{bmatrix}=
+\begin{bmatrix}
+\cos\theta_y & 0 & -\sin\theta_y \\
+0            & 1 & 0             \\
+\sin\theta_y & 0 & \cos\theta_y
+\end{bmatrix}\;\begin{bmatrix}Z\end{bmatrix}=
+\begin{bmatrix}
+\cos\theta_z  & \sin\theta_z & 0 \\
+-\sin\theta_z & \cos\theta_z & 0 \\
+0             & 0            & 1
+\end{bmatrix}\;
+$$
+
+
+$$
+\begin{bmatrix}X\end{bmatrix}\begin{bmatrix}Y\end{bmatrix}\begin{bmatrix}Z\end{bmatrix}=
+\begin{bmatrix}
+\cos\theta_z\cos\theta_y                                       & \sin\theta_z\cos\theta_y                                       & -\sin\theta_y            \\
+-\sin\theta_z\cos\theta_x+\cos\theta_z\sin\theta_y\sin\theta_x & \cos\theta_z\cos\theta_x+\sin\theta_z\sin\theta_y\sin\theta_x  & \cos\theta_y\sin\theta_x \\
+\sin\theta_z\sin\theta_x+\cos\theta_z\sin\theta_y\cos\theta_x  & -\cos\theta_z\sin\theta_x+\sin\theta_z\sin\theta_y\cos\theta_x & \cos\theta_y\cos\theta_x
+\end{bmatrix}\;
+$$
+
+
+$$
+pitch\left( rad \right) =  \arctan{ \frac{ 2q_2q_3+2q_0q_1 }{ 2q_0^2-1+2q_3^2 }}
+$$
+
+
+$$
+roll\left( rad \right) =- \arcsin{\left( 2q_1q_3-2q_0q_2 \right) }
+$$
+
+
+$$
+yaw\left( rad \right) =  \arctan{ \frac{2q_1q_2+2q_0q_3 }{ 2q_0^2-1+2q_1^2 }}
+$$
+
+
+## 地磁校准 YAW
+
+在利用加速度计和陀螺仪只能较为准确地确定 ROLL 和 PITCH 角，YAW 角由加速度积分所得，MEMS传感器存在温漂，所以经过长时间积分，YAW角误差会很大。所以要加上地磁传感器来校准YAW角。
+
+在使用加速度计和角速度计解算姿态利用**重力加速度恒等于1g并垂直向下**的特点，与这相似，使用地磁传感器时，利用**地磁场矢量恒指向北极**。
+当姿态旋转矩阵的Pitch和Roll角准确时，即现实中的B系和计算得到B系的z轴重叠（XOY平面重叠）时，把从地磁传感器获得地磁场在B系的矢量
+$
+{\begin{bmatrix}b\_m_x & b\_m_y & b\_m_z\end{bmatrix}}^\top
+$
+旋转到N系
+$
+{\begin{bmatrix}b2n\_m_x & b2n\_m_y & b2n\_m_z\end{bmatrix}}^\top
+$。
+在计算得到
+$
+{\begin{bmatrix}n\_m_{north} & 0 & n\_m_{sky}\end{bmatrix}}^\top
+$
+就是需要的恒定矢量。
+
+只需要加速度计和陀螺仪融合数据时的过程2和3之间加入以下过程。
+
+
+1. 归一化传感器输入的B系地磁矢量
+	$
+	{\begin{bmatrix}b\_m_x & b\_m_y & b\_m_z\end{bmatrix}}^\top
+	$
+	。把B系地磁矢量旋转到N系
+	$
+	{\begin{bmatrix}b2n\_m_x & b2n\_m_y & b2n\_m_z\end{bmatrix}}^\top
+	$
+	。
+	
+	$$
+	{\begin{bmatrix}b2n\_m_x \\ b2n\_m_y \\ b2n\_m_z\end{bmatrix}} = C^n_b\cdot {\begin{bmatrix}b\_m_x \\ b\_m_y \\ b\_m_z\end{bmatrix}}
+	$$
+
+2. 利用
+	$
+	{\begin{bmatrix}b2n\_m_x & b2n\_m_y & b2n\_m_z\end{bmatrix}}^\top
+	$
+	算得在*x轴指向北极的坐标系*中指向北极的矢量
+	$
+	{\begin{bmatrix}n\_m_{north} & 0 & n\_m_{sky}\end{bmatrix}}^\top
+	$
+	，再把他转换回 b 系得到
+	$
+	{\begin{bmatrix}n2b\_m_x & n2b\_m_y  & n2b\_m_z\end{bmatrix}}^\top
+	$
+	。
+	$$
+	{\begin{bmatrix}n\_m_{north} \\ 0 \\ n\_m_{sky}\end{bmatrix}} = {\begin{bmatrix}({b2n\_m_{x}^2+b2n\_m_{y}^2)}^{1/2} \\ 0 \\ b2n\_m_{sky}\end{bmatrix}}
+	$$
+
+
+	$$
+	{\begin{bmatrix}n2b\_m_x \\ n2b\_m_y \\ n2b\_m_z\end{bmatrix}} = C^b_n \cdot {\begin{bmatrix}n\_m_{north} \\ 0 \\ n\_m_{sky}\end{bmatrix}}
+	$$
+
+3. 叉积计算误差，误差补偿。
+	$$
+	{\begin{bmatrix}e\_m_x \\ e\_m_y \\ e\_m_z\end{bmatrix}} = {\begin{bmatrix}n2b\_m_x \\ n2b\_m_y \\ n2b\_m_z\end{bmatrix}} \times {\begin{bmatrix}b\_m_x \\ b\_m_y \\ b\_m_z\end{bmatrix}}
+	$$
+	$$
+	{\begin{bmatrix}e\_x \\ e\_y \\ e\_z\end{bmatrix}} = {\begin{bmatrix}n2b\_m_x \\ n2b\_m_y \\ n2b\_m_z\end{bmatrix}} \times {\begin{bmatrix}b\_m_x \\ b\_m_y \\ b\_m_z\end{bmatrix}} + {\begin{bmatrix}e\_a_x \\ e\_a_y \\ e\_a_z\end{bmatrix}}
+	$$
+
+
+## 一些思考
+1. 同一姿态角情况下，在加速运动时测得加速度，与稳定状态下的加速度不相同，会引起姿态角的误差。
+2. 地磁传感器校正时，运算过程中去掉z轴分量，可能会降低噪音？效果更好？
+3. 在把误差补偿到角速度时，用了一个PI控制器，作用应该是类似一个作用与于误差的滤波器。
+
+
+
+## 参考文献
+
+
+[Open source IMU and AHRS algorithms - 1](https://x-io.co.uk/open-source-imu-and-ahrs-algorithms/)
+
+
+[Open source IMU and AHRS algorithms - 2](https://www.x-io.co.uk/res/doc/madgwick_internal_report.pdf)
+
+
+[Krasjet对于四元数与三维旋转的简单讨论](https://krasjet.github.io/quaternion/quaternion.pdf)

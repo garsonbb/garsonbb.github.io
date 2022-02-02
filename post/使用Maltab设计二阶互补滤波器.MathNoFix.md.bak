@@ -1,0 +1,50 @@
+---
+title: "使用Maltab设计二阶互补滤波器"
+tags: ["控制"]
+draft: false
+slug: "butter_matlab"
+mathjax: true
+date: "2021-04-05 21:10:00"
+---
+
+
+```matlab
+clear,clc % HPF
+
+N = 2; % 二阶
+fs=1000; % 采样率Hz
+fc=50; % 3dB截止频率
+OmegaC=(fc*2*pi/1000) /pi; % 截止频率归一化
+
+[ b, a ] = butter(N,OmegaC,'HIGH');
+
+freqz(b,a);
+```
+
+```matlab
+clear,clc % LPF
+
+N = 2; % 二阶
+fs=1000; % 采样率Hz
+fc=50; % 3dB截止频率
+OmegaC=(fc*2*pi/1000) /pi; % 截止频率归一化
+
+[ b, a ] = butter(N,OmegaC,'LOW');
+
+freqz(b,a);
+```
+
+butter函数说明[https://ww2.mathworks.cn/help/signal/ref/butter.html](https://ww2.mathworks.cn/help/signal/ref/butter.html)，默认是生成数字滤波器的传递函数系数，用双线性变换从模拟滤波器转为数字滤波器。
+
+得到传递函数的系数b,a。进行反z变换到离散域，就可以得到差分方程。
+
+$$
+\frac{Y(z)_{zs}}{X(z)}=H(z)=\frac{B(z)}{A(z)}
+$$
+
+$$
+B(z)=\sum_{j=0}^m{b_{m-j}z^{-j}}=b_m+b_{m-1}z^{-1}+...+b_0z^{-m} \\\\ A(z)=\sum_{i=0}^n{a_{n-i}z^{-i}}=a_n+a_{n-1}z^{-1}+...+a_0z^{-n}
+$$
+
+
+在Matlab得到的[ b, a ]中，$b = [b_{m},b_{m-1}, \ ...\ ,b_{0}]，a = [a_{n},a_{n-1}, \ ...\ ,a_{0}]$
