@@ -7,4 +7,4 @@ npcDocker的网络模式是custom:br时，不能通过局域网ip访问网络模
 为什么custom:br会这样，我在unraid论坛找到这样的描述。
 Bridge mode
 shares IP with unRAID usually ok but sometimes annoying because container wants a specific port that&amp;rsquo;s already in use by unRAID or another container. your network cannot distinguish between container traffic and NAS services (hard to perform QoS or specific VPN routing) Custom eth0/br0
-allows your container to have a different IP from unRAID.</description></item></channel></rss>
+allows your container to have a different IP from unRAID. This is mostly OK since this means stuff like QoS and selective VPN routing can be done.</description></item></channel></rss>
